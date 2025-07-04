@@ -1,0 +1,12 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+test.db
+*.db
+*.sqlite3
+.env
+.git
+.gitignore
+README.md
+tests 
