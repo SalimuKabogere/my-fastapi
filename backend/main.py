@@ -1,5 +1,4 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Form
-
 from backend.utils.authentication import create_access_token, get_current_user, hash_password, verify_password, role_checker
 from backend.models.database import engine, SessionLocal, Base
 from fastapi.security import OAuth2PasswordBearer
@@ -13,6 +12,7 @@ from urllib.parse import unquote
 from backend.utils.sanitization import sanitize_username, validate_password, sanitize_free_text
 import logging
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
 
 Base.metadata.create_all(bind=engine)
 
@@ -20,7 +20,7 @@ Base.metadata.create_all(bind=engine)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+app = FastAPI(docs_url=None, redoc_url=None, swagger_ui_oauth2_redirect_url="/oauth2-redirect")
 
 
 
@@ -33,6 +33,8 @@ app.add_middleware(
 )
 
 oauth_scheme = OAuth2PasswordBearer(tokenUrl='login')
+redirect_path = app.swagger_ui_oauth2_redirect_url or "/oauth2-redirect"
+openapi_url = app.openapi_url or "/openapi.json"
 
 def get_db():
     db = SessionLocal()
@@ -61,6 +63,19 @@ def validate_uuid(uuid_str: str) -> bool:
     """Validate if string is a valid UUID format"""
     uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
     return bool(uuid_pattern.match(uuid_str))
+
+@app.get("/", include_in_schema=False)
+async def custom_swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url= openapi_url,
+        title="My API - Swagger UI",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+        swagger_ui_parameters={"defaultModelsExpandDepth": -1}
+    )
+
+@app.get(redirect_path, include_in_schema=False)
+async def swagger_ui_redirect():
+    return get_swagger_ui_oauth2_redirect_html()
 
 @app.post("/register", response_model=UserResponse)
 def register_user(user: UserRequest) -> UserResponse:
