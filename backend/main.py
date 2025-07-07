@@ -13,6 +13,7 @@ from backend.utils.sanitization import sanitize_username, validate_password, san
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
+from fastapi import APIRouter
 
 Base.metadata.create_all(bind=engine)
 
@@ -77,31 +78,30 @@ async def custom_swagger_ui_html():
 async def swagger_ui_redirect():
     return get_swagger_ui_oauth2_redirect_html()
 
-@app.post("/register", response_model=UserResponse)
+# Create an APIRouter for auth endpoints
+auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# Auth endpoints grouped together in logical order
+@auth_router.post("/register", response_model=UserResponse)
 def register_user(user: UserRequest) -> UserResponse:
     # Sanitize input
     sanitized_username = sanitize_username(user.username)
     sanitized_role = sanitize_free_text(user.role, max_length=16)
-    
     # Validate role
     if sanitized_role not in ["admin", "user"]:
         logging.error(f"Invalid role: {sanitized_role}")
         raise HTTPException(status_code=400, detail="Role must be 'admin' or 'user'")
-
     # Check for duplicate username
     if sanitized_username in username_map:
         logging.error(f"Username already exists: {sanitized_username}")
         raise HTTPException(status_code=400, detail=f"Username '{sanitized_username}' already exists")
-
     # Validate password
     if not validate_password(user.password):
         logging.error(f"Invalid password: {user.password}")
         raise HTTPException(status_code=400, detail="Password must be 8-128 characters and include a letter, number, and symbol.")
-
     # Generate user ID
     user_id = uuid4()
     username_map[sanitized_username] = user_id
-
     # Store user with hashed password
     stored = UserStored(
         uuid=user_id,
@@ -110,7 +110,6 @@ def register_user(user: UserRequest) -> UserResponse:
         password=hash_password(user.password)
     )
     user_db[user_id] = stored
-
     # Prepare response
     response = UserResponse(
         user_id=user_id,
@@ -120,8 +119,7 @@ def register_user(user: UserRequest) -> UserResponse:
     logging.info(f"User registered successfully: {sanitized_username}")
     return response
 
-
-@app.post("/login", response_model=Token)
+@auth_router.post("/login", response_model=Token)
 def login_user(
     username: str = Form(...),
     password: str = Form(...),
@@ -130,25 +128,54 @@ def login_user(
     # Sanitize input
     sanitized_username = sanitize_username(username)
     sanitized_role = sanitize_free_text(role, max_length=16)
-    
     user_id = username_map.get(sanitized_username)
-
     if not user_id:
         logging.error(f"User not found: {sanitized_username}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
     user = user_db.get(user_id)
     if not user or not verify_password(password, user.password):
         logging.error(f"Invalid credentials: {sanitized_username}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
     if user.role != sanitized_role:
         logging.error(f"Role does not match user: {sanitized_username}")
         raise HTTPException(status_code=401, detail="Role does not match user")
-
     token = create_access_token(data={"sub": sanitized_username})
     logging.info(f"User logged in successfully: {sanitized_username}")
     return {"access_token": token, "token_type": "bearer"}
+
+@auth_router.post("/logout")
+def logout_user(current: Tuple[UUID, UserStored] = Depends(get_current_user)):
+    # For JWT, logout is typically handled client-side by deleting the token.
+    # If using token blacklisting, add token to blacklist here.
+    return {"message": "Logged out successfully"}
+
+@auth_router.post("/forgot-password")
+def forgot_password(username: str = Form(...)):
+    # Simulate sending a password reset link or code to the user's email.
+    # In production, look up user by username/email and send email with token.
+    if username not in username_map:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Here, you would generate a reset token and send it via email.
+    return {"message": f"Password reset instructions sent to the email for {username}"}
+
+@auth_router.post("/reset-password")
+def reset_password(username: str = Form(...), new_password: str = Form(...), reset_token: str = Form(...)):
+    # In production, validate the reset_token and ensure it matches the user.
+    if username not in username_map:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not new_password or new_password.strip() == "":
+        raise HTTPException(status_code=400, detail="Password cannot be empty.")
+    if not validate_password(new_password):
+        raise HTTPException(status_code=400, detail="Password must be 8-128 characters and include a letter, number, and symbol.")
+    user_id = username_map[username]
+    user = user_db[user_id]
+    # Check if new password is the same as the current password
+    if verify_password(new_password, user.password):
+        raise HTTPException(status_code=400, detail="New password must be different from the current password.")
+    # Optionally, add more criteria here (e.g., password history, common passwords, etc.)
+    user.password = hash_password(new_password)
+    # Invalidate the reset token here in production.
+    return {"message": "Password reset successful"}
 
 
 @app.get("/users/", response_model=List[UserResponse])
@@ -236,3 +263,6 @@ def user_dashboard(current: Tuple[UUID, UserStored] = Depends(role_checker(["use
 @app.options("/test")
 def options_test():
     return {"message": "OPTIONS works"}
+
+# Include the auth_router in the main app
+app.include_router(auth_router)
