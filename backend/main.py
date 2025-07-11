@@ -1,10 +1,10 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Form
+from fastapi import FastAPI, Depends, HTTPException, Form
 from backend.utils.authentication import create_access_token, get_current_user, hash_password, verify_password, role_checker
 from backend.models.database import engine, SessionLocal, Base
 from fastapi.security import OAuth2PasswordBearer
 from typing import List, Tuple
 from uuid import UUID, uuid4
-from backend.schemas.user import UserRequest, UserResponse, UserResponseWithStatus, UserStored, Token
+from backend.schemas.user import UserRequest, UserResponse, UserStored, Token
 from backend.models.storage import user_db, username_map
 import re
 import html
@@ -14,6 +14,8 @@ import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
 from fastapi import APIRouter
+from pydantic import BaseModel
+
 
 Base.metadata.create_all(bind=engine)
 
@@ -141,7 +143,7 @@ def login_user(
         raise HTTPException(status_code=401, detail="Role does not match user")
     token = create_access_token(data={"sub": sanitized_username})
     logging.info(f"User logged in successfully: {sanitized_username}")
-    return {"access_token": token, "token_type": "bearer"}
+    return {"access_token": token,"user_id": user_id, "role": sanitized_role,"token_type": "bearer"}
 
 @auth_router.post("/logout")
 def logout_user(current: Tuple[UUID, UserStored] = Depends(get_current_user)):
@@ -178,8 +180,14 @@ def reset_password(username: str = Form(...), new_password: str = Form(...), res
     return {"message": "Password reset successful"}
 
 
+# --- User Management Endpoints ---
+
 @app.get("/users/", response_model=List[UserResponse])
 def get_all_users(current: Tuple[UUID, UserStored]=Depends(get_current_user)):
+
+    _, user = current
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can view all users")
     return [
         UserResponse(
             user_id=uid,
@@ -225,40 +233,112 @@ def delete_user(user_id: UUID, current: Tuple[UUID, UserStored]=Depends(get_curr
     return {"message": "User deleted successfully"}
 
 
-# admin dashboard
-@app.get("/admin/dashboard", response_model=UserResponseWithStatus)
-def admin_dashboard(current: Tuple[UUID, UserStored] = Depends(role_checker(["admin"]))):
-    user_id, user = current
+# --- User/Profile Management Endpoints ---
 
-    user_data = UserResponse(
-        user_id=user_id,
-        username=user.username,
-        role=user.role
-    )
+# Update a user's profile (user can update own, admin can update any)
+@app.put("/users/{user_id}")
+def update_user_profile(user_id: UUID, user_update: UserRequest, current: Tuple[UUID, UserStored]=Depends(get_current_user)):
+    current_id, current_user = current
+    if current_user.role != "admin" and current_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this profile")
+    user = user_db.get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-    return UserResponseWithStatus(
-        status_code=status.HTTP_200_OK,
-        message="Welcome to the admin dashboard",
-        error=None,
-        data=user_data
-    )
+    # Prevent non-admins from attempting to change their role
+    if current_user.role != "admin" and user_update.role and user_update.role != user.role:
+        raise HTTPException(status_code=403, detail="You are not allowed to change your role.")
 
-# user dashboard
-@app.get("/user/dashboard", response_model=UserResponseWithStatus)
-def user_dashboard(current: Tuple[UUID, UserStored] = Depends(role_checker(["user"]))):
-    user_id, user = current
-    user_data = UserResponse(
-        user_id=user_id, 
-        username=user.username, 
-        role=user.role
-    )
-    
-    return UserResponseWithStatus(
-        status_code=200,
-        message="Welcome to the user dashboard",
-        error=None,
-        data=user_data
-    )
+    # Update username mapping if username changes
+    old_username = user.username
+    new_username = sanitize_username(user_update.username)
+    if old_username != new_username:
+        del username_map[old_username]
+        username_map[new_username] = user_id
+        user.username = new_username
+
+    # Update password if changed
+    if user_update.password and not verify_password(user_update.password, user.password):
+        user.password = hash_password(user_update.password)
+
+    # Only admin can update role, and must be a valid role
+    if current_user.role == "admin" and user_update.role:
+        sanitized_role = sanitize_free_text(user_update.role, max_length=16)
+        if sanitized_role not in ["admin", "user"]:
+            raise HTTPException(status_code=400, detail="Role must be 'admin' or 'user'")
+        user.role = sanitized_role
+
+    return {"message": "Profile updated successfully"}
+
+# Get all profiles/roles assigned to a user
+@app.get("/users/{user_id}/profiles")
+def get_user_profiles(user_id: UUID, current: Tuple[UUID, UserStored]=Depends(get_current_user)):
+    current_id, current_user = current
+    if current_user.role != "admin" and current_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this user's roles")
+    user = user_db.get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"roles": [user.role], "username": user.username	}
+
+# Assign or update profiles/roles for a user (admin only)
+class RolesUpdateRequest(BaseModel):
+    roles: List[str]
+
+@app.put("/users/{user_id}/profiles")
+def assign_user_profiles(user_id: UUID, req: RolesUpdateRequest, current: Tuple[UUID, UserStored]=Depends(role_checker(["admin"]))):
+    roles = req.roles
+    user = user_db.get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    # For simplicity, only one role per user in this model
+    if not roles or roles[0] not in ["admin", "user"]:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    user.role = roles[0]
+    return {"message": f"Role updated to {roles[0]} for user {user_id}"}
+
+# Unassign a specific profile/role from a user (admin only)
+@app.delete("/users/{user_id}/profiles/{profile_id}")
+def unassign_user_profile(user_id: UUID, profile_id: str, current: Tuple[UUID, UserStored]=Depends(role_checker(["admin"]))):
+    user = user_db.get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.role == profile_id:
+        user.role = "user"  # Default to 'user' if role removed
+        return {"message": f"Role {profile_id} removed from user {user_id}, {user.username}"}
+    return {"message": f"User {user_id}, {user.username} does not have role {profile_id}"}
+
+# --- Profile Management Endpoints ---
+
+# List all available profiles/roles (admin only)
+@app.get("/profiles")
+def list_profiles(current: Tuple[UUID, UserStored]=Depends(role_checker(["admin"]))):
+    return {"profiles": ["admin", "user"]}
+
+# Get details of a specific profile/role (admin only)
+@app.get("/profiles/{profile_id}")
+def get_profile(profile_id: str, current: Tuple[UUID, UserStored]=Depends(role_checker(["admin"]))):
+    if profile_id not in ["admin", "user"]:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    # Example: return permissions or metadata
+    return {"profile": profile_id, "permissions": ["all"] if profile_id == "admin" else ["basic"]}
+
+# Assign a profile/role to multiple users (admin only)
+class UserIDsUpdateRequest(BaseModel):
+    user_ids: List[UUID]
+
+@app.put("/profiles/{profile_id}/users")
+def assign_profile_to_users(profile_id: str, req: UserIDsUpdateRequest, current: Tuple[UUID, UserStored]=Depends(role_checker(["admin"]))):
+    user_ids = req.user_ids
+    if profile_id not in ["admin", "user"]:
+        raise HTTPException(status_code=400, detail="Invalid profile")
+    updated: list[str] = []
+    for uid in user_ids:
+        user = user_db.get(uid)
+        if user:
+            user.role = profile_id
+            updated.append(str(uid))
+    return {"message": f"Assigned profile {profile_id} to users", "updated_users": updated}
 
 @app.options("/test")
 def options_test():
