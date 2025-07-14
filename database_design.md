@@ -134,6 +134,279 @@ CREATE TABLE user_profiles (
 );
 ```
 
+## Entity Relationship Diagram (ERD)
+
+```mermaid
+erDiagram
+    USERS {
+        uuid id PK
+        varchar(50) username UK
+        varchar(255) email UK
+        varchar(255) password_hash
+        varchar(100) first_name
+        varchar(100) last_name
+        boolean is_active
+        boolean is_verified
+        integer failed_login_attempts
+        timestamp locked_until
+        timestamp last_login
+        timestamp created_at
+        timestamp updated_at
+        uuid created_by FK
+        uuid updated_by FK
+    }
+
+    ROLES {
+        uuid id PK
+        varchar(50) name UK
+        text description
+        boolean is_active
+        timestamp created_at
+    }
+
+    PERMISSIONS {
+        uuid id PK
+        varchar(100) name UK
+        varchar(50) resource
+        varchar(50) action
+        text description
+    }
+
+    USER_ROLES {
+        uuid user_id PK,FK
+        uuid role_id PK,FK
+        timestamp assigned_at
+        uuid assigned_by FK
+    }
+
+    ROLE_PERMISSIONS {
+        uuid role_id PK,FK
+        uuid permission_id PK,FK
+    }
+
+    USER_SESSIONS {
+        uuid id PK
+        uuid user_id FK
+        varchar(255) token_hash
+        varchar(45) ip_address
+        text user_agent
+        boolean is_active
+        timestamp expires_at
+        timestamp created_at
+        timestamp last_accessed
+    }
+
+    PASSWORD_HISTORY {
+        uuid id PK
+        uuid user_id FK
+        varchar(255) password_hash
+        timestamp created_at
+    }
+
+    AUDIT_LOGS {
+        uuid id PK
+        uuid user_id FK
+        varchar(100) action
+        varchar(50) resource_type
+        varchar(255) resource_id
+        json old_values
+        json new_values
+        varchar(45) ip_address
+        text user_agent
+        timestamp created_at
+    }
+
+    LOGIN_ATTEMPTS {
+        uuid id PK
+        varchar(50) username
+        varchar(45) ip_address
+        boolean success
+        varchar(255) failure_reason
+        timestamp created_at
+    }
+
+    USER_PROFILES {
+        uuid user_id PK,FK
+        varchar(500) avatar_url
+        text bio
+        varchar(20) phone
+        varchar(50) timezone
+        varchar(10) language
+        varchar(20) theme
+        boolean notifications_enabled
+        boolean two_factor_enabled
+        varchar(255) two_factor_secret
+        timestamp updated_at
+    }
+
+    %% Core User Management
+    USERS ||--o{ USER_ROLES : "has"
+    ROLES ||--o{ USER_ROLES : "assigned to"
+    ROLES ||--o{ ROLE_PERMISSIONS : "has"
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : "belongs to"
+
+    %% User Profile and Sessions
+    USERS ||--|| USER_PROFILES : "has profile"
+    USERS ||--o{ USER_SESSIONS : "has sessions"
+
+    %% Security and Audit
+    USERS ||--o{ PASSWORD_HISTORY : "tracks"
+    USERS ||--o{ AUDIT_LOGS : "generates"
+
+    %% Self-referential relationships
+    USERS ||--o{ USERS : "created_by"
+    USERS ||--o{ USERS : "updated_by"
+    USERS ||--o{ USER_ROLES : "assigned_by"
+```
+
+## Database Indexes and Performance
+
+```sql
+-- Primary performance indexes
+CREATE INDEX idx_users_username ON users(username);
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_is_active ON users(is_active);
+CREATE INDEX idx_users_last_login ON users(last_login);
+
+-- Session management indexes
+CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id);
+CREATE INDEX idx_user_sessions_token_hash ON user_sessions(token_hash);
+CREATE INDEX idx_user_sessions_expires_at ON user_sessions(expires_at);
+CREATE INDEX idx_user_sessions_is_active ON user_sessions(is_active);
+
+-- Audit and security indexes
+CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
+CREATE INDEX idx_audit_logs_action ON audit_logs(action);
+CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
+CREATE INDEX idx_login_attempts_username ON login_attempts(username);
+CREATE INDEX idx_login_attempts_ip_address ON login_attempts(ip_address);
+CREATE INDEX idx_login_attempts_created_at ON login_attempts(created_at);
+
+-- RBAC indexes
+CREATE INDEX idx_user_roles_user_id ON user_roles(user_id);
+CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);
+CREATE INDEX idx_role_permissions_role_id ON role_permissions(role_id);
+```
+
+## Connecting to Real Databases
+
+### PostgreSQL Configuration
+
+1. **Install PostgreSQL driver:**
+
+```bash
+pip install psycopg2-binary
+```
+
+2. **Environment Variables:**
+
+```bash
+export DATABASE_URL="postgresql://username:password@localhost:5432/dbname"
+export DB_POOL_SIZE=10
+export DB_MAX_OVERFLOW=20
+export SQL_DEBUG=false
+```
+
+3. **Docker PostgreSQL Setup:**
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: userdb
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: your_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  postgres_data:
+```
+
+### MySQL Configuration
+
+1. **Install MySQL driver:**
+
+```bash
+pip install mysqlclient
+# or
+pip install PyMySQL
+```
+
+2. **Environment Variables:**
+
+```bash
+export DATABASE_URL="mysql+pymysql://username:password@localhost:3306/dbname"
+```
+
+### Production Database Setup
+
+```sql
+-- PostgreSQL production setup script
+-- Create database
+CREATE DATABASE userdb;
+CREATE USER app_user WITH PASSWORD 'secure_password';
+GRANT ALL PRIVILEGES ON DATABASE userdb TO app_user;
+
+-- Enable UUID extension
+\c userdb;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Create tables (run the schema from above)
+-- Add production indexes
+-- Set up backup jobs
+```
+
+### Environment Configuration
+
+Create a `.env` file:
+
+```env
+# Database Configuration
+DATABASE_URL=postgresql://app_user:secure_password@localhost:5432/userdb
+DB_POOL_SIZE=20
+DB_MAX_OVERFLOW=30
+SQL_DEBUG=false
+
+# JWT Configuration
+JWT_SECRET_KEY=your-super-secret-jwt-key
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Email Configuration (for verification)
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+
+# Security Configuration
+PASSWORD_MIN_LENGTH=8
+MAX_FAILED_LOGIN_ATTEMPTS=5
+ACCOUNT_LOCKOUT_DURATION_MINUTES=30
+```
+
+### Migration Commands
+
+```bash
+# Initialize database
+python backend/database_init.py --reset --seed
+
+# Create migration (future feature)
+python manage.py create_migration "add_user_preferences"
+
+# Apply migrations
+python manage.py migrate
+
+# Rollback migration
+python manage.py rollback 1
+```
+
 ## Key Improvements
 
 ### 1. **Persistent Storage**
