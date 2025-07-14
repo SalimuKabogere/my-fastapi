@@ -350,3 +350,7 @@ def options_test():
 
 # Include the auth_router in the main app
 app.include_router(auth_router)
+
+# Include database-powered endpoints
+from backend.api.users import router as users_v2_router
+app.include_router(users_v2_router)
