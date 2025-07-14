@@ -111,7 +111,7 @@ def register_user(user: UserRequest):
     # Store user with hashed password
     stored = UserStored(
         uuid=user_id,
-        username=sanitized_username,
+        "username": sanitized_username,
         role=sanitized_role,
         password=hash_password(user.password)
     )
@@ -119,7 +119,7 @@ def register_user(user: UserRequest):
     # Prepare response
             response = {
         "user_id": str(user_id),
-        username=sanitized_username,
+        "username": sanitized_username,
         role=sanitized_role
     )
     logging.info(f"User registered successfully: {sanitized_username}")
