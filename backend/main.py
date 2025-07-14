@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Form
 from backend.utils.authentication import create_access_token, get_current_user, hash_password, verify_password, role_checker
-from backend.models.database import engine, SessionLocal, Base
+from backend.models.database import engine, SessionLocal, Base, get_db
+from backend.init import init_database
 from fastapi.security import OAuth2PasswordBearer
 from typing import List, Tuple
 from uuid import UUID, uuid4
