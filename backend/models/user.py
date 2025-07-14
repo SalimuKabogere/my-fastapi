@@ -10,7 +10,7 @@ UUID_TYPE = String(36)
 class User(Base):
     __tablename__ = "users"
 
-        id = Column(UUID_TYPE, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    id = Column(UUID_TYPE, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     username = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
@@ -23,8 +23,8 @@ class User(Base):
     last_login = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_by = Column(UUID_TYPE, ForeignKey("users.id"))
+    updated_by = Column(UUID_TYPE, ForeignKey("users.id"))
 
     # Relationships
     user_roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
@@ -43,7 +43,7 @@ class User(Base):
 class Role(Base):
     __tablename__ = "roles"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID_TYPE, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(50), unique=True, nullable=False)
     description = Column(Text)
     is_active = Column(Boolean, default=True)
@@ -59,7 +59,7 @@ class Role(Base):
 class Permission(Base):
     __tablename__ = "permissions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID_TYPE, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(100), unique=True, nullable=False)
     resource = Column(String(50), nullable=False)
     action = Column(String(50), nullable=False)
@@ -74,10 +74,10 @@ class Permission(Base):
 class UserRole(Base):
     __tablename__ = "user_roles"
 
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
-    role_id = Column(UUID(as_uuid=True), ForeignKey("roles.id"), primary_key=True)
+    user_id = Column(UUID_TYPE, ForeignKey("users.id"), primary_key=True)
+    role_id = Column(UUID_TYPE, ForeignKey("roles.id"), primary_key=True)
     assigned_at = Column(DateTime(timezone=True), server_default=func.now())
-    assigned_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    assigned_by = Column(UUID_TYPE, ForeignKey("users.id"))
 
     # Relationships
     user = relationship("User", back_populates="user_roles", foreign_keys=[user_id])
@@ -87,8 +87,8 @@ class UserRole(Base):
 class RolePermission(Base):
     __tablename__ = "role_permissions"
 
-    role_id = Column(UUID(as_uuid=True), ForeignKey("roles.id"), primary_key=True)
-    permission_id = Column(UUID(as_uuid=True), ForeignKey("permissions.id"), primary_key=True)
+    role_id = Column(UUID_TYPE, ForeignKey("roles.id"), primary_key=True)
+    permission_id = Column(UUID_TYPE, ForeignKey("permissions.id"), primary_key=True)
 
     # Relationships
     role = relationship("Role", back_populates="role_permissions")
@@ -97,10 +97,10 @@ class RolePermission(Base):
 class UserSession(Base):
     __tablename__ = "user_sessions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    id = Column(UUID_TYPE, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(UUID_TYPE, ForeignKey("users.id"), nullable=False)
     token_hash = Column(String(255), nullable=False)
-    ip_address = Column(INET)
+    ip_address = Column(String(45))  # IPv6 max length
     user_agent = Column(Text)
     is_active = Column(Boolean, default=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
@@ -116,8 +116,8 @@ class UserSession(Base):
 class PasswordHistory(Base):
     __tablename__ = "password_history"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    id = Column(UUID_TYPE, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(UUID_TYPE, ForeignKey("users.id"), nullable=False)
     password_hash = Column(String(255), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -127,14 +127,14 @@ class PasswordHistory(Base):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    id = Column(UUID_TYPE, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(UUID_TYPE, ForeignKey("users.id"))
     action = Column(String(100), nullable=False)
     resource_type = Column(String(50))
     resource_id = Column(String(255))
-    old_values = Column(JSONB)
-    new_values = Column(JSONB)
-    ip_address = Column(INET)
+    old_values = Column(JSON)  # Use JSON instead of JSONB for SQLite
+    new_values = Column(JSON)  # Use JSON instead of JSONB for SQLite
+    ip_address = Column(String(45))  # IPv6 max length
     user_agent = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -147,9 +147,9 @@ class AuditLog(Base):
 class LoginAttempt(Base):
     __tablename__ = "login_attempts"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID_TYPE, primary_key=True, default=lambda: str(uuid.uuid4()))
     username = Column(String(50))
-    ip_address = Column(INET)
+    ip_address = Column(String(45))  # IPv6 max length
     success = Column(Boolean, nullable=False)
     failure_reason = Column(String(255))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -160,7 +160,7 @@ class LoginAttempt(Base):
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
+    user_id = Column(UUID_TYPE, ForeignKey("users.id"), primary_key=True)
     avatar_url = Column(String(500))
     bio = Column(Text)
     phone = Column(String(20))
