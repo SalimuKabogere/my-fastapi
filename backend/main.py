@@ -18,7 +18,8 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 
-Base.metadata.create_all(bind=engine)
+# Initialize database tables
+init_database()
 
 # logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
