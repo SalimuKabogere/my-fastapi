@@ -12,6 +12,8 @@ DATABASE_URL = os.getenv(
     "sqlite:///./test.db"
 )
 
+print(f"🗄️  Database: {DATABASE_URL.split('@')[0] + '@***' if '@' in DATABASE_URL else DATABASE_URL}")
+
 # Engine configuration based on database type
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(
