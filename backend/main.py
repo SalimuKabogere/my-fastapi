@@ -88,7 +88,7 @@ async def swagger_ui_redirect():
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # Auth endpoints grouped together in logical order
-@auth_router.post("/register", response_model=UserResponse)
+@auth_router.post("/register")
 def register_user(user: UserRequest) -> UserResponse:
     # Sanitize input
     sanitized_username = sanitize_username(user.username)
