@@ -353,4 +353,6 @@ app.include_router(auth_router)
 
 # Include database-powered endpoints
 from backend.api.users import router as users_v2_router
+from backend.api.simple_db import router as simple_db_router
 app.include_router(users_v2_router)
+app.include_router(simple_db_router)
