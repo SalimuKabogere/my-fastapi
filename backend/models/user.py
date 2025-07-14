@@ -10,7 +10,7 @@ UUID_TYPE = String(36)
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+        id = Column(UUID_TYPE, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     username = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
