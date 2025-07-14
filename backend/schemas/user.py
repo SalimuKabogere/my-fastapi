@@ -240,6 +240,5 @@ class LoginStats(BaseModel):
     unique_ips: int
     top_failure_reasons: List[dict]
 
-# Forward references for circular imports
-UserWithRoles.model_rebuild()
-RoleWithPermissions.model_rebuild()
+# Simple schemas without circular references for now
+# Complex schemas can be built later when needed
