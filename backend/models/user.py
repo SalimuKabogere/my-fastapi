@@ -1,9 +1,11 @@
-from sqlalchemy import Column, String, Boolean, Integer, DateTime, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, INET, JSONB
+from sqlalchemy import Column, String, Boolean, Integer, DateTime, Text, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from backend.models.database import Base
 import uuid
+
+# Use String for UUID in SQLite compatibility mode
+UUID_TYPE = String(36)
 
 class User(Base):
     __tablename__ = "users"
