@@ -120,7 +120,7 @@ def register_user(user: UserRequest):
     response = {
         "user_id": str(user_id),
         "username": sanitized_username,
-        role=sanitized_role
+        "role": sanitized_role
     )
     logging.info(f"User registered successfully: {sanitized_username}")
     return response
