@@ -89,7 +89,7 @@ auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # Auth endpoints grouped together in logical order
 @auth_router.post("/register")
-def register_user(user: UserRequest) -> UserResponse:
+def register_user(user: UserRequest):
     # Sanitize input
     sanitized_username = sanitize_username(user.username)
     sanitized_role = sanitize_free_text(user.role, max_length=16)
