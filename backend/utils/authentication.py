@@ -13,7 +13,7 @@ from backend.models.storage import user_db, username_map
 
 
 load_dotenv()
-SECRET_KEY_ENV = os.getenv("SECRET_KEY")
+SECRET_KEY_ENV = os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY")
 PASSWORD_EXPIRE_MINUTES = 30
 ALGORITHM = 'HS256'
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login") 
@@ -73,4 +73,3 @@ def role_checker(allowed_roles: List[str]):
             )
         return current
     return checker
-

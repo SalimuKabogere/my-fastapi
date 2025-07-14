@@ -1,10 +1,13 @@
 from fastapi import FastAPI, Depends, HTTPException, Form
 from backend.utils.authentication import create_access_token, get_current_user, hash_password, verify_password, role_checker
-from backend.models.database import engine, SessionLocal, Base
+from backend.models.database import engine, SessionLocal, Base, get_db
+from backend.init import init_database
 from fastapi.security import OAuth2PasswordBearer
 from typing import List, Tuple
 from uuid import UUID, uuid4
 from backend.schemas.user import UserRequest, UserResponse, UserStored, Token
+from backend.models.user import User as UserModel
+from sqlalchemy.orm import Session
 from backend.models.storage import user_db, username_map
 import re
 import html
@@ -17,7 +20,8 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 
-Base.metadata.create_all(bind=engine)
+# Initialize database tables
+init_database()
 
 # logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -84,8 +88,8 @@ async def swagger_ui_redirect():
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # Auth endpoints grouped together in logical order
-@auth_router.post("/register", response_model=UserResponse)
-def register_user(user: UserRequest) -> UserResponse:
+@auth_router.post("/register")
+def register_user(user: UserRequest):
     # Sanitize input
     sanitized_username = sanitize_username(user.username)
     sanitized_role = sanitize_free_text(user.role, max_length=16)
@@ -113,11 +117,11 @@ def register_user(user: UserRequest) -> UserResponse:
     )
     user_db[user_id] = stored
     # Prepare response
-    response = UserResponse(
-        user_id=user_id,
-        username=sanitized_username,
-        role=sanitized_role
-    )
+    response = {
+        "user_id": str(user_id),
+        "username": sanitized_username,
+        "role": sanitized_role
+    }
     logging.info(f"User registered successfully: {sanitized_username}")
     return response
 
@@ -346,3 +350,9 @@ def options_test():
 
 # Include the auth_router in the main app
 app.include_router(auth_router)
+
+# Include database-powered endpoints
+from backend.api.users import router as users_v2_router
+from backend.api.simple_db import router as simple_db_router
+app.include_router(users_v2_router)
+app.include_router(simple_db_router)
