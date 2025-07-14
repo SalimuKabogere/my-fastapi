@@ -117,7 +117,7 @@ def register_user(user: UserRequest):
     )
     user_db[user_id] = stored
     # Prepare response
-    response = UserResponse(
+        response = {
         user_id=user_id,
         username=sanitized_username,
         role=sanitized_role
