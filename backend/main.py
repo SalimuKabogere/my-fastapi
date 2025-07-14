@@ -78,8 +78,7 @@ async def custom_swagger_ui_html():
         title="My API - Swagger UI",
         oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
         swagger_ui_parameters={"defaultModelsExpandDepth": -1}
-        "message": "User registered successfully"
-    }
+    )
 
 @app.get(redirect_path, include_in_schema=False)
 async def swagger_ui_redirect():
@@ -112,19 +111,17 @@ def register_user(user: UserRequest):
     # Store user with hashed password
     stored = UserStored(
         uuid=user_id,
-        "username": sanitized_username,
-        "role": sanitized_role,,
+        username=sanitized_username,
+        role=sanitized_role,
         password=hash_password(user.password)
-        "message": "User registered successfully"
-    }
+    )
     user_db[user_id] = stored
     # Prepare response
-                response = {
-        "user_id": str(user_id),
-        "username": sanitized_username,
-        "role": sanitized_role,
-        "message": "User registered successfully"
-    }
+        response = {
+        user_id=user_id,
+        username=sanitized_username,
+        role=sanitized_role
+    )
     logging.info(f"User registered successfully: {sanitized_username}")
     return response
 
@@ -200,8 +197,7 @@ def get_all_users(current: Tuple[UUID, UserStored]=Depends(get_current_user)):
             user_id=uid,
             username=user.username,
             role=user.role
-            "message": "User registered successfully"
-    }
+        )
         for uid, user in user_db.items()
     ]
 
@@ -218,11 +214,10 @@ def get_user_by_id(user_id: UUID, current: Tuple[UUID, UserStored]=Depends(get_c
         raise HTTPException(status_code=404, detail="User not found")
     logging.info(f"User retrieved successfully: {user.username}")
     return UserResponse(
-        "user_id": str(user_id),
+        user_id=user_id,
         username=user.username,
         role=user.role
-        "message": "User registered successfully"
-    }
+    )
 
 
 @app.delete("/users_del/{user_id}")
