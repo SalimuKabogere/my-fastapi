@@ -118,7 +118,7 @@ def register_user(user: UserRequest):
     user_db[user_id] = stored
     # Prepare response
             response = {
-        user_id=user_id,
+        "user_id": str(user_id),
         username=sanitized_username,
         role=sanitized_role
     )
@@ -214,7 +214,7 @@ def get_user_by_id(user_id: UUID, current: Tuple[UUID, UserStored]=Depends(get_c
         raise HTTPException(status_code=404, detail="User not found")
     logging.info(f"User retrieved successfully: {user.username}")
     return UserResponse(
-        user_id=user_id,
+        "user_id": str(user_id),
         username=user.username,
         role=user.role
     )
