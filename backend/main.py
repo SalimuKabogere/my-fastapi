@@ -112,7 +112,7 @@ def register_user(user: UserRequest):
     stored = UserStored(
         uuid=user_id,
         "username": sanitized_username,
-        role=sanitized_role,
+        "role": sanitized_role,,
         password=hash_password(user.password)
     )
     user_db[user_id] = stored
@@ -120,7 +120,7 @@ def register_user(user: UserRequest):
             response = {
         "user_id": str(user_id),
         "username": sanitized_username,
-        role=sanitized_role
+        "role": sanitized_role,
     )
     logging.info(f"User registered successfully: {sanitized_username}")
     return response
