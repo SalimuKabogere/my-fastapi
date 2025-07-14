@@ -119,7 +119,12 @@ async def database_status(db: Session = Depends(get_db)):
                 # Simple query to test connection
         from sqlalchemy import text
         result = db.execute(text("SELECT 1")).scalar()
-        user_count = db.query(UserModel).count()
+                # Simple count query without relationships
+        user_count = 0
+        try:
+            user_count = len(db.execute(text("SELECT id FROM users")).fetchall())
+        except:
+            user_count = 0
         
         return {
             "status": "connected",
