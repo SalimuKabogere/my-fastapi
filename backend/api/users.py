@@ -116,8 +116,9 @@ async def login_user_db(username: str, password: str, db: Session = Depends(get_
 async def database_status(db: Session = Depends(get_db)):
     """Check database connection status."""
     try:
-        # Simple query to test connection
-        result = db.execute("SELECT 1").scalar()
+                # Simple query to test connection
+        from sqlalchemy import text
+        result = db.execute(text("SELECT 1")).scalar()
         user_count = db.query(UserModel).count()
         
         return {
